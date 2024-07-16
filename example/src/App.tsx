@@ -25,6 +25,7 @@ import {
   ScrollView,
   StatusBar,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -49,6 +50,7 @@ const RenderListItem = React.memo(
     onPanStateChange,
     currentPlaybackSpeed,
     changeSpeed,
+    isExternalUrl = false,
   }: {
     item: ListItem;
     currentPlaying: string;
@@ -56,18 +58,30 @@ const RenderListItem = React.memo(
     onPanStateChange: (value: boolean) => void;
     currentPlaybackSpeed: PlaybackSpeedType;
     changeSpeed: () => void;
+    isExternalUrl?: boolean;
   }) => {
     const ref = useRef<IWaveformRef>(null);
     const [playerState, setPlayerState] = useState(PlayerState.stopped);
     const styles = stylesheet({ currentUser: item.fromCurrentUser });
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(isExternalUrl ? false : true);
+    const [downloadExternalAudio, setDownloadExternalAudio] = useState(false);
+    const [isAudioDownloaded, setIsAudioDownloaded] = useState(false);
 
-    const handleButtonAction = () => {
+    const handleButtonAction = (): void => {
       if (playerState === PlayerState.stopped) {
         setCurrentPlaying(item.path);
       } else {
         setCurrentPlaying('');
       }
+    };
+
+    const handleDownloadPress = (): void => {
+      setDownloadExternalAudio(true);
+      if (currentPlaying === item.path) {
+        setCurrentPlaying('');
+      }
+
+      setIsLoading(true);
     };
 
     useEffect(() => {
@@ -79,7 +93,15 @@ const RenderListItem = React.memo(
     }, [currentPlaying]);
 
     return (
-      <View key={item.path} style={[styles.listItemContainer]}>
+      <View
+        key={item.path}
+        style={[
+          styles.listItemContainer,
+          item.fromCurrentUser &&
+            isExternalUrl &&
+            !isAudioDownloaded &&
+            styles.listItemReverseContainer,
+        ]}>
         <View style={styles.listItemWidth}>
           <ImageBackground
             source={
@@ -118,6 +140,7 @@ const RenderListItem = React.memo(
               scrubColor={Colors.white}
               waveColor={Colors.gray}
               candleHeightScale={4}
+              downloadExternalAudio={downloadExternalAudio}
               onPlayerStateChange={state => {
                 setPlayerState(state);
                 if (
@@ -127,9 +150,19 @@ const RenderListItem = React.memo(
                   setCurrentPlaying('');
                 }
               }}
+              isExternalUrl={isExternalUrl}
               onPanStateChange={onPanStateChange}
               onError={error => {
                 console.log(error, 'we are in example');
+              }}
+              onDownloadStateChange={state => {
+                console.log('Download State', state);
+              }}
+              onDownloadProgressChange={progress => {
+                console.log('Download Progress', `${progress}%`);
+                if (progress === 100) {
+                  setIsAudioDownloaded(true);
+                }
               }}
               onCurrentProgressChange={(currentProgress, songDuration) => {
                 console.log(
@@ -154,6 +187,15 @@ const RenderListItem = React.memo(
             )}
           </ImageBackground>
         </View>
+        {isExternalUrl && !downloadExternalAudio && !isAudioDownloaded ? (
+          <TouchableOpacity onPress={handleDownloadPress}>
+            <Image
+              source={Icons.download}
+              style={styles.downloadIcon}
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
+        ) : null}
       </View>
     );
   }
@@ -281,6 +323,7 @@ const AppContainer = () => {
                   currentPlaying={currentPlaying}
                   setCurrentPlaying={setCurrentPlaying}
                   item={item}
+                  isExternalUrl={item.isExternalUrl}
                   onPanStateChange={value => setShouldScroll(!value)}
                   {...{ currentPlaybackSpeed, changeSpeed }}
                 />
